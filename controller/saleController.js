@@ -2,7 +2,12 @@ import asyncHandler from "express-async-handler";
 import Sale from "../schemas/saleSchema.js";
 import Product from "../schemas/productSchema.js";
 import { validationResult } from "express-validator";
-
+import dayjs from "dayjs";
+import {
+  handleAlreadyExists,
+  handleErrorResponse,
+  handleSuccessResponse,
+} from "../utils/responseHandlers.js";
 // Create Sale
 export const createSale = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
@@ -109,4 +114,104 @@ export const deleteSale = asyncHandler(async (req, res) => {
   res
     .status(200)
     .json({ success: true, msg: "Sale cancelled successfully", data: sale });
+});
+
+export const getTodaySummary = asyncHandler(async (req, res) => {
+  const start = dayjs().startOf("day").toDate();
+  const end = dayjs().endOf("day").toDate();
+
+  const sales = await Sale.find({
+    status: "ACTIVE",
+    createdAt: { $gte: start, $lte: end },
+  });
+
+  const totalSales = sales.reduce((sum, s) => sum + s.totalSale, 0);
+  const totalProfit = sales.reduce((sum, s) => sum + s.profit, 0);
+
+  return handleSuccessResponse(res, "Today's summary", {
+    totalSales,
+    totalProfit,
+    totalOrders: sales.length,
+  });
+});
+
+// ------------------ 2. DATE RANGE ANALYTICS ------------------
+export const getSalesByDateRange = asyncHandler(async (req, res) => {
+  const { from, to } = req.query;
+
+  if (!from || !to) {
+    return handleNotFound(res, "from and to dates are required", 400);
+  }
+
+  const sales = await Sale.find({
+    status: "ACTIVE",
+    createdAt: { $gte: new Date(from), $lte: new Date(to) },
+  });
+
+  const totalSales = sales.reduce((sum, s) => sum + s.totalSale, 0);
+  const totalProfit = sales.reduce((sum, s) => sum + s.profit, 0);
+
+  return handleSuccessResponse(res, "Sales analytics", {
+    totalSales,
+    totalProfit,
+    totalOrders: sales.length,
+    avgOrderValue: sales.length ? totalSales / sales.length : 0,
+  });
+});
+
+// ------------------ 3. BEST SELLING PRODUCTS ------------------
+export const getBestSellingProducts = asyncHandler(async (req, res) => {
+  const data = await Sale.aggregate([
+    { $match: { status: "ACTIVE" } },
+    {
+      $group: {
+        _id: "$product",
+        totalQuantity: { $sum: "$quantity" },
+        totalWeight: { $sum: "$weight" },
+        totalSales: { $sum: "$totalSale" },
+      },
+    },
+    { $sort: { totalQuantity: -1 } },
+    { $limit: 10 },
+  ]);
+
+  return handleSuccessResponse(res, "Top selling products", data);
+});
+
+// ------------------ 4. DAILY SALES (LAST 7 OR 30 DAYS) ------------------
+export const getDailySales = asyncHandler(async (req, res) => {
+  const days = Number(req.query.days) || 7;
+
+  const startDate = dayjs().subtract(days, "day").startOf("day").toDate();
+
+  const data = await Sale.aggregate([
+    { $match: { status: "ACTIVE", createdAt: { $gte: startDate } } },
+    {
+      $group: {
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+        totalSales: { $sum: "$totalSale" },
+        totalProfit: { $sum: "$profit" },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+
+  return handleSuccessResponse(res, "Daily sales chart", data);
+});
+
+// ------------------ 5. MONTHLY SUMMARY ------------------
+export const getMonthlySalesSummary = asyncHandler(async (req, res) => {
+  const data = await Sale.aggregate([
+    { $match: { status: "ACTIVE" } },
+    {
+      $group: {
+        _id: { month: { $month: "$createdAt" } },
+        totalSales: { $sum: "$totalSale" },
+        totalProfit: { $sum: "$profit" },
+      },
+    },
+    { $sort: { "_id.month": 1 } },
+  ]);
+
+  return handleSuccessResponse(res, "Monthly sales summary", data);
 });
