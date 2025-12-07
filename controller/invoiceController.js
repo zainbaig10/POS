@@ -17,6 +17,7 @@ import {
   signInvoiceHash,
   getPublicKey,
 } from "../utils/zatcaPhase2.js";
+import product from "../schemas/productSchema.js";
 
 // Generate next invoice number (simple increment, replace with better logic in prod)
 
@@ -118,9 +119,23 @@ export const getAllInvoices = asyncHandler(async (req, res) => {
 
 export const getInvoiceById = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const invoice = await Invoice.findById(id).populate("sales").lean();
+
+  const invoice = await Invoice.findById(id)
+    .populate({
+      path: "sales",
+      populate: {
+        path: "product",
+        model: "Product",
+        select: "name unit weight sellingPrice",
+      },
+    })
+    .lean();
+
   if (!invoice)
-    return res.status(404).json({ success: false, msg: "Invoice not found" });
+    return res.status(404).json({
+      success: false,
+      msg: "Invoice not found",
+    });
 
   res.status(200).json({ success: true, data: invoice });
 });
