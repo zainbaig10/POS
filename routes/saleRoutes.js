@@ -16,6 +16,7 @@ import {
   getRecentOrders,
   getDailyRevenue,
   getMonthlyRevenueSales,
+  getTopSellingItems,
 } from "../controller/saleController.js";
 import {
   createSaleValidator,
@@ -92,5 +93,7 @@ router.get("/recent-orders", getRecentOrders);
 router.get("/daily-revenue", getDailyRevenue);
 
 router.get("/monthly-revenue-sales", getMonthlyRevenueSales);
+
+router.get("/top-selling-items", getTopSellingItems);
 
 export default router;

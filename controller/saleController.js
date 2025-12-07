@@ -497,3 +497,68 @@ export const getMonthlyRevenueSales = async (req, res) => {
     });
   }
 };
+
+export const getTopSellingItems = async (req, res) => {
+  try {
+    const { limit = 5 } = req.query; // default top 5
+
+    // 1️⃣ Aggregate total quantity per product
+    const totalOrders = await Sale.aggregate([
+      {
+        $group: {
+          _id: "$product",
+          totalQuantity: { $sum: "$quantity" },
+        },
+      },
+      {
+        $lookup: {
+          from: "products",
+          localField: "_id",
+          foreignField: "_id",
+          as: "product",
+        },
+      },
+      { $unwind: "$product" },
+      {
+        $project: {
+          _id: 0,
+          productName: "$product.name",
+          totalQuantity: 1,
+        },
+      },
+      { $sort: { totalQuantity: -1 } },
+    ]);
+
+    const grandTotal = totalOrders.reduce(
+      (acc, item) => acc + item.totalQuantity,
+      0
+    );
+
+    // Add percentage
+    const topSelling = totalOrders.slice(0, Number(limit)).map((item) => ({
+      productName: item.productName,
+      totalQuantity: item.totalQuantity,
+      percentage:
+        grandTotal > 0
+          ? ((item.totalQuantity / grandTotal) * 100).toFixed(2)
+          : "0.00",
+    }));
+
+    logger.info("Fetched top selling items");
+
+    return res.status(200).json({
+      success: true,
+      msg: "Top selling items fetched successfully",
+      data: topSelling,
+    });
+  } catch (error) {
+    console.log(error);
+    logger.error(error.message);
+
+    return res.status(500).json({
+      success: false,
+      msg: "Failed to fetch top selling items",
+      error: error.message,
+    });
+  }
+};
