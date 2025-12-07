@@ -437,3 +437,63 @@ export const getDailyRevenue = async (req, res) => {
     });
   }
 };
+
+export const getMonthlyRevenueSales = async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+
+    const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
+    const endOfYear = new Date(`${year}-12-31T23:59:59.999Z`);
+
+    const result = await Sale.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: startOfYear, $lte: endOfYear },
+        },
+      },
+      {
+        $group: {
+          _id: { month: { $month: "$createdAt" } },
+          totalSales: { $sum: "$netAmount" },
+          totalRevenue: { $sum: "$totalWithVat" },
+        },
+      },
+      {
+        $project: {
+          month: "$_id.month",
+          totalSales: 1,
+          totalRevenue: 1,
+          _id: 0,
+        },
+      },
+      { $sort: { month: 1 } },
+    ]);
+
+    // Fill missing months with zeros
+    const monthlyData = Array.from({ length: 12 }, (_, i) => {
+      const monthRecord = result.find((r) => r.month === i + 1);
+      return {
+        month: i + 1,
+        totalSales: monthRecord ? monthRecord.totalSales : 0,
+        totalRevenue: monthRecord ? monthRecord.totalRevenue : 0,
+      };
+    });
+
+    logger.info(`Fetched monthly revenue vs sales for year ${year}`);
+
+    return res.status(200).json({
+      success: true,
+      msg: "Monthly revenue vs sales fetched successfully",
+      data: monthlyData,
+    });
+  } catch (error) {
+    console.log(error);
+    logger.error(error.message);
+
+    return res.status(500).json({
+      success: false,
+      msg: "Failed to fetch monthly revenue vs sales",
+      error: error.message,
+    });
+  }
+};
