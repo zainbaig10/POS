@@ -332,3 +332,108 @@ export const getDashboardStats = async (req, res) => {
     });
   }
 };
+
+export const getRecentOrders = async (req, res) => {
+  try {
+    const { limit = 10, status } = req.query; // default 10 orders
+
+    const filter = {};
+    if (status) filter.status = status;
+
+    const recentOrders = await Sale.find(filter)
+      .populate("product", "name price") // include product details
+      .populate("invoiceId", "invoiceNumber") // include invoice info if needed
+      .sort({ createdAt: -1 }) // newest first
+      .limit(Number(limit));
+
+    logger.info("Fetched recent orders");
+
+    return res.status(200).json({
+      success: true,
+      msg: "Recent orders fetched successfully",
+      data: recentOrders,
+    });
+  } catch (error) {
+    console.log(error);
+    logger.error(error.message);
+
+    return res.status(500).json({
+      success: false,
+      msg: "Failed to fetch recent orders",
+      error: error.message,
+    });
+  }
+};
+
+export const getDailyRevenue = async (req, res) => {
+  try {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    // Set start/end times
+    const startOfToday = new Date(today.setHours(0, 0, 0, 0));
+    const endOfToday = new Date(today.setHours(23, 59, 59, 999));
+
+    const startOfYesterday = new Date(yesterday.setHours(0, 0, 0, 0));
+    const endOfYesterday = new Date(yesterday.setHours(23, 59, 59, 999));
+
+    // Aggregate sales
+    const results = await Sale.aggregate([
+      {
+        $facet: {
+          today: [
+            { $match: { createdAt: { $gte: startOfToday, $lte: endOfToday } } },
+            {
+              $group: {
+                _id: null,
+                totalSales: { $sum: "$netAmount" },
+                totalRevenue: { $sum: "$totalWithVat" },
+              },
+            },
+          ],
+          yesterday: [
+            {
+              $match: {
+                createdAt: { $gte: startOfYesterday, $lte: endOfYesterday },
+              },
+            },
+            {
+              $group: {
+                _id: null,
+                totalSales: { $sum: "$netAmount" },
+                totalRevenue: { $sum: "$totalWithVat" },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    const todayData = results[0].today[0] || { totalSales: 0, totalRevenue: 0 };
+    const yesterdayData = results[0].yesterday[0] || {
+      totalSales: 0,
+      totalRevenue: 0,
+    };
+
+    logger.info("Fetched today and yesterday revenue stats");
+
+    return res.status(200).json({
+      success: true,
+      msg: "Daily revenue fetched successfully",
+      data: {
+        today: todayData,
+        yesterday: yesterdayData,
+      },
+    });
+  } catch (error) {
+    console.log(error);
+    logger.error(error.message);
+
+    return res.status(500).json({
+      success: false,
+      msg: "Failed to fetch daily revenue",
+      error: error.message,
+    });
+  }
+};

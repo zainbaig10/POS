@@ -13,6 +13,8 @@ import {
   getVatSummary,
   getVatInvoicePreview,
   getDashboardStats,
+  getRecentOrders,
+  getDailyRevenue,
 } from "../controller/saleController.js";
 import {
   createSaleValidator,
@@ -83,5 +85,9 @@ router.get(
 );
 
 router.get("/stats", getDashboardStats);
+
+router.get("/recent-orders", getRecentOrders);
+
+router.get("/daily-revenue", getDailyRevenue);
 
 export default router;
