@@ -8,38 +8,42 @@ import {
   handleErrorResponse,
   handleSuccessResponse,
 } from "../utils/responseHandlers.js";
+import Invoice from "../schemas/invoiceSchema.js";
 // Create Sale
 export const createSale = asyncHandler(async (req, res) => {
+  // 1️⃣ Validate request body
   const errors = validationResult(req);
-  if (!errors.isEmpty())
-    return res.status(400).json({ success: false, errors: errors.array() });
+  if (!errors.isEmpty()) return handleErrorResponse(res, errors.array());
 
-  const { product, weight, quantity, sellingPrice, purchasePrice, invoiceId } =
-    req.body;
+  const { product, weight, quantity, sellingPrice, purchasePrice } = req.body;
 
+  // 2️⃣ Check product existence
   const prod = await Product.findById(product);
-  if (!prod)
-    return res.status(404).json({ success: false, msg: "Product not found" });
+  if (!prod) return handleErrorResponse(res, "Product", product);
 
-  const totalSale = sellingPrice * quantity;
-  const profit = totalSale - purchasePrice * quantity;
+  // 3️⃣ Calculate amounts assuming sellingPrice includes VAT
+  const totalSale = +(sellingPrice * quantity).toFixed(2); // VAT-inclusive
+  const netAmount = +(totalSale / 1.15).toFixed(2); // Net before VAT
+  const vatAmount = +(totalSale - netAmount).toFixed(2); // VAT amount
+  const profit = +(netAmount - purchasePrice * quantity).toFixed(2);
 
+  // 4️⃣ Create sale document
   const sale = await Sale.create({
     product,
-    weight,
+    weight: weight || 0,
     quantity,
     sellingPrice,
     purchasePrice,
-    totalSale,
+    netAmount,
+    vatPercentage: 15,
+    vatAmount,
+    totalWithVat: totalSale,
     profit,
-    invoiceId,
   });
 
-  res
-    .status(201)
-    .json({ success: true, msg: "Sale created successfully", data: sale });
+  // 5️⃣ Send response
+  return handleSuccessResponse(res, "Sale created successfully", sale);
 });
-
 // Get All Sales
 export const getAllSales = asyncHandler(async (req, res) => {
   const sales = await Sale.find({ status: "ACTIVE" })
@@ -214,4 +218,78 @@ export const getMonthlySalesSummary = asyncHandler(async (req, res) => {
   ]);
 
   return handleSuccessResponse(res, "Monthly sales summary", data);
+});
+
+export const getVatSummary = asyncHandler(async (req, res) => {
+  const now = new Date();
+
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+  const [todayVat, monthVat, yearVat] = await Promise.all([
+    Sale.aggregate([
+      { $match: { createdAt: { $gte: startOfToday }, status: "ACTIVE" } },
+      { $group: { _id: null, totalVat: { $sum: "$vatAmount" } } },
+    ]),
+
+    Sale.aggregate([
+      { $match: { createdAt: { $gte: startOfMonth }, status: "ACTIVE" } },
+      { $group: { _id: null, totalVat: { $sum: "$vatAmount" } } },
+    ]),
+
+    Sale.aggregate([
+      { $match: { createdAt: { $gte: startOfYear }, status: "ACTIVE" } },
+      { $group: { _id: null, totalVat: { $sum: "$vatAmount" } } },
+    ]),
+  ]);
+
+  return handleSuccessResponse(res, "VAT summary fetched", {
+    todayVat: todayVat[0]?.totalVat || 0,
+    monthVat: monthVat[0]?.totalVat || 0,
+    yearVat: yearVat[0]?.totalVat || 0,
+  });
+});
+
+export const getVatInvoicePreview = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const invoice = await Invoice.findById(id)
+    .populate({
+      path: "sales",
+      populate: { path: "product" },
+    })
+    .lean();
+
+  if (!invoice) return sendNotFound(res, "Invoice", id);
+
+  // Return structured VAT breakdown for preview
+  return handleSuccessResponse(res, "Invoice VAT preview", {
+    invoiceNumber: invoice.invoiceNumber,
+    date: invoice.createdAt,
+    customerName: invoice.customerName || "N/A",
+
+    totals: {
+      totalNetAmount: invoice.totalNetAmount,
+      totalVatAmount: invoice.totalVatAmount,
+      totalAmount: invoice.totalAmount,
+      totalProfit: invoice.totalProfit,
+    },
+
+    items: invoice.sales.map((s) => ({
+      productName: s.product?.name,
+      quantity: s.quantity,
+      sellingPrice: s.sellingPrice,
+      netAmount: s.netAmount,
+      vatPercentage: s.vatPercentage,
+      vatAmount: s.vatAmount,
+      totalWithVat: s.totalWithVat,
+    })),
+
+    qrCode: invoice.qrCode || null, // ZATCA QR ready
+  });
 });

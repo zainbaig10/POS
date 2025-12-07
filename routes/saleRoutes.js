@@ -10,6 +10,8 @@ import {
   getBestSellingProducts,
   getDailySales,
   getMonthlySalesSummary,
+  getVatSummary,
+  getVatInvoicePreview,
 } from "../controller/saleController.js";
 import {
   createSaleValidator,
@@ -63,6 +65,20 @@ router.get(
   authenticateJWT,
   authorizeRoles("ADMIN", "SUPER_ADMIN"),
   getMonthlySalesSummary
+);
+
+router.get(
+  "/summary",
+  authenticateJWT,
+  authorizeRoles("SUPER_ADMIN", "ADMIN"),
+  getVatSummary
+);
+
+router.get(
+  "/invoice/:id",
+  authenticateJWT,
+  authorizeRoles("SUPER_ADMIN", "ADMIN"),
+  getVatInvoicePreview
 );
 
 export default router;

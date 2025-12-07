@@ -21,14 +21,18 @@
     "express": "^5.2.1",
     "express-async-handler": "^1.2.0",
     "express-validator": "^7.3.1",
+    "fs": "^0.0.1-security",
     "jsonwebtoken": "^9.0.3",
+    "lodash.escape": "^4.0.1",
     "mongoose": "^8.20.1",
     "multer": "^2.0.2",
     "node": "^20.19.6",
     "nodemon": "^3.1.11",
     "path": "^0.12.7",
     "pdfkit": "^0.17.2",
+    "uuid": "^13.0.0",
     "winston": "^3.18.3",
-    "winston-daily-rotate-file": "^5.0.0"
+    "winston-daily-rotate-file": "^5.0.0",
+    "xmlbuilder2": "^3.1.1"
   }
 }

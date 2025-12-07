@@ -6,6 +6,8 @@ import {
   updateInvoice,
   deleteInvoice,
 } from "../controller/invoiceController.js";
+import { getInvoiceXml } from "../controller/invoiceXmlController.js";
+import { finalizeInvoicePhase2 } from "../controller/invoicePhase2Controller.js";
 import {
   validateCreateInvoice,
   validateUpdateInvoice,
@@ -63,5 +65,19 @@ router
     validate,
     deleteInvoice
   );
+
+router.get(
+  "/:id/xml",
+  authenticateJWT,
+  authorizeRoles("SUPER_ADMIN", "ADMIN"),
+  getInvoiceXml
+);
+
+router.post(
+  "/:id/finalize",
+  authenticateJWT,
+  authorizeRoles("SUPER_ADMIN", "ADMIN"),
+  finalizeInvoicePhase2
+);
 
 export default router;
