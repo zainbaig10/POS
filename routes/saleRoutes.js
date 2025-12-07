@@ -12,6 +12,7 @@ import {
   getMonthlySalesSummary,
   getVatSummary,
   getVatInvoicePreview,
+  getDashboardStats,
 } from "../controller/saleController.js";
 import {
   createSaleValidator,
@@ -80,5 +81,7 @@ router.get(
   authorizeRoles("SUPER_ADMIN", "ADMIN"),
   getVatInvoicePreview
 );
+
+router.get("/stats", getDashboardStats);
 
 export default router;

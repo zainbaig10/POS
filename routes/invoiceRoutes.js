@@ -6,7 +6,10 @@ import {
   updateInvoice,
   deleteInvoice,
 } from "../controller/invoiceController.js";
-import { getInvoiceXml } from "../controller/invoiceXmlController.js";
+import {
+  getInvoiceXml,
+  submitInvoiceToSandbox,
+} from "../controller/invoiceXmlController.js";
 import { finalizeInvoicePhase2 } from "../controller/invoicePhase2Controller.js";
 import {
   validateCreateInvoice,
@@ -79,5 +82,7 @@ router.post(
   authorizeRoles("SUPER_ADMIN", "ADMIN"),
   finalizeInvoicePhase2
 );
+
+router.get("/:id/submit-sandbox", submitInvoiceToSandbox);
 
 export default router;

@@ -12,6 +12,8 @@ import {
 } from "../utils/responseHandlers.js";
 import escape from "lodash.escape";
 import mongoose from "mongoose";
+import { generateInvoiceXml } from "../utils/invoiceXmlGenerator.js";
+import { signXml } from "../utils/signXml.js";
 
 /**
  * GET /api/invoice/:id/xml
@@ -106,5 +108,45 @@ export const getInvoiceXml = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, msg: "Server error" });
+  }
+};
+
+export const submitInvoiceToSandbox = async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) return res.status(404).json({ msg: "Invoice not found" });
+
+    // 1️⃣ Generate XML
+    const xml = generateInvoiceXml(invoice);
+
+    // 2️⃣ Sign XML
+    const signedXml = signXml(xml);
+
+    // 3️⃣ Send to Sandbox
+    const response = await axios.post(
+      process.env.FATOORA_SANDBOX_URL,
+      signedXml,
+      {
+        headers: {
+          "Content-Type": "application/xml",
+        },
+      }
+    );
+
+    // 4️⃣ Store QR code & UUID from sandbox response
+    invoice.qrCode = response.data.qrCode;
+    invoice.uuid = response.data.uuid;
+    await invoice.save();
+
+    res.status(200).json({
+      msg: "Invoice submitted successfully",
+      qrCode: invoice.qrCode,
+      uuid: invoice.uuid,
+    });
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    res
+      .status(500)
+      .json({ msg: "Failed to submit invoice", error: err.message });
   }
 };

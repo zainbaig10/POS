@@ -9,6 +9,7 @@ import {
   handleSuccessResponse,
 } from "../utils/responseHandlers.js";
 import Invoice from "../schemas/invoiceSchema.js";
+import logger from "../utils/logger.js";
 // Create Sale
 export const createSale = asyncHandler(async (req, res) => {
   // 1️⃣ Validate request body
@@ -293,3 +294,41 @@ export const getVatInvoicePreview = asyncHandler(async (req, res) => {
     qrCode: invoice.qrCode || null, // ZATCA QR ready
   });
 });
+
+export const getDashboardStats = async (req, res) => {
+  try {
+    const result = await Sale.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: "$netAmount" },
+          totalRevenue: { $sum: "$totalWithVat" },
+          totalProfit: { $sum: "$profit" },
+        },
+      },
+    ]);
+
+    const data = result[0] || {
+      totalSales: 0,
+      totalRevenue: 0,
+      totalProfit: 0,
+    };
+
+    logger.info("Fetched dashboard statistics");
+
+    return res.status(200).json({
+      success: true,
+      msg: "Dashboard stats fetched successfully",
+      data,
+    });
+  } catch (error) {
+    console.log(error);
+    logger.error(error.message);
+
+    return res.status(500).json({
+      success: false,
+      msg: "Failed to fetch dashboard stats",
+      error: error.message,
+    });
+  }
+};
